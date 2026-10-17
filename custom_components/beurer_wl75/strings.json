@@ -1,0 +1,54 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
+      "no_devices_found": "[%key:common::config_flow::abort::no_devices_found%]"
+    },
+    "error": {
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
+    },
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "data": {
+          "address": "Bluetooth address"
+        },
+        "description": "Close the LightUp app first, the lamp accepts only one connection."
+      }
+    }
+  },
+  "entity": {
+    "light": {
+      "main_light": {
+        "name": "Light"
+      },
+      "mood_light": {
+        "name": "Mood light"
+      }
+    }
+  },
+  "exceptions": {
+    "device_not_found": {
+      "message": "Could not find the Beurer WL75 with address {address}"
+    },
+    "update_failed": {
+      "message": "Could not read the lamp state: {error}"
+    },
+    "command_failed": {
+      "message": "Could not send the command to the lamp: {error}"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "poll_interval": "Poll interval"
+        },
+        "data_description": {
+          "poll_interval": "How often Home Assistant reads the lamp state. 0 = never: the state is only read at startup and after commands from Home Assistant, changes made on the lamp or in the app then show up later. Every read briefly connects to the lamp, and the LightUp app cannot connect during that time."
+        }
+      }
+    }
+  }
+}

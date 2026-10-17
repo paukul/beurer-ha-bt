@@ -1,0 +1,19 @@
+{
+  "domain": "beurer_wl75",
+  "name": "Beurer WL75",
+  "bluetooth": [
+    {
+      "local_name": "WL75*",
+      "connectable": true
+    }
+  ],
+  "codeowners": ["@paukul"],
+  "config_flow": true,
+  "dependencies": ["bluetooth_adapters"],
+  "documentation": "https://github.com/paukul/beurer-ha-bt",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/paukul/beurer-ha-bt/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

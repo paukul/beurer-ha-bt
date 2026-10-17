@@ -1,0 +1,54 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Gerät ist bereits eingerichtet",
+      "no_devices_found": "Keine Geräte gefunden"
+    },
+    "error": {
+      "cannot_connect": "Verbindung fehlgeschlagen",
+      "unknown": "Unerwarteter Fehler"
+    },
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "data": {
+          "address": "Bluetooth-Adresse"
+        },
+        "description": "Bitte vorher die LightUp-App schließen, die Lampe erlaubt nur eine Verbindung."
+      }
+    }
+  },
+  "entity": {
+    "light": {
+      "main_light": {
+        "name": "Licht"
+      },
+      "mood_light": {
+        "name": "Stimmungslicht"
+      }
+    }
+  },
+  "exceptions": {
+    "device_not_found": {
+      "message": "Beurer WL75 mit Adresse {address} nicht gefunden"
+    },
+    "update_failed": {
+      "message": "Status der Lampe konnte nicht gelesen werden: {error}"
+    },
+    "command_failed": {
+      "message": "Befehl konnte nicht an die Lampe gesendet werden: {error}"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "poll_interval": "Abfrageintervall"
+        },
+        "data_description": {
+          "poll_interval": "Wie oft Home Assistant den Zustand der Lampe liest. 0 = nie: Der Zustand wird nur beim Start und nach Befehlen aus Home Assistant gelesen; Änderungen an der Lampe oder in der App erscheinen dann erst später. Jede Abfrage verbindet kurz mit der Lampe, in der Zeit kann sich die LightUp-App nicht verbinden."
+        }
+      }
+    }
+  }
+}

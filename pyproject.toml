@@ -1,0 +1,35 @@
+[project]
+name = "beurer-wl75"
+version = "0.1.0"
+description = "Home Assistant Bluetooth integration for the Beurer WL75 wake-up light"
+requires-python = ">=3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "aiousbwatcher==1.1.2",
+    "bluetooth-auto-recovery==1.6.4",
+    "dbus-fast==5.0.22",
+    "pytest-homeassistant-custom-component",
+    "serialx==1.11.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["custom_components"]
+force-sort-within-sections = true
+combine-as-imports = true
