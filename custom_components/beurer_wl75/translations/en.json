@@ -26,6 +26,122 @@
       "mood_light": {
         "name": "Mood light"
       }
+    },
+    "number": {
+      "alarm_volume": {
+        "name": "Alarm {alarm} volume"
+      },
+      "alarm_sunrise_minutes": {
+        "name": "Alarm {alarm} sunrise duration"
+      },
+      "alarm_brightness": {
+        "name": "Alarm {alarm} light brightness"
+      },
+      "sleep_minutes": {
+        "name": "Sleep duration"
+      },
+      "sleep_brightness": {
+        "name": "Sleep light brightness"
+      },
+      "sleep_volume": {
+        "name": "Sleep volume"
+      }
+    },
+    "select": {
+      "alarm_tone": {
+        "name": "Alarm {alarm} tone",
+        "state": {
+          "buzzer": "Buzzer",
+          "nature": "Nature",
+          "bells": "Bells",
+          "classic": "Classic",
+          "passion": "Passion",
+          "morning_lights": "Morning lights",
+          "joyful": "Joyful",
+          "radio": "Radio"
+        }
+      },
+      "alarm_wake_up_light": {
+        "name": "Alarm {alarm} wake-up light",
+        "state": {
+          "off": "Off",
+          "sunrise": "Sunrise",
+          "energizing_light": "Energizing light"
+        }
+      },
+      "alarm_snooze": {
+        "name": "Alarm {alarm} snooze",
+        "state": {
+          "1": "1 min",
+          "2": "2 min",
+          "5": "5 min",
+          "10": "10 min",
+          "20": "20 min",
+          "30": "30 min"
+        }
+      },
+      "sleep_light": {
+        "name": "Sleep light",
+        "state": {
+          "off": "Off",
+          "sunset": "Sunset",
+          "mood": "Mood light",
+          "relax": "Relax"
+        }
+      },
+      "sleep_sound": {
+        "name": "Sleep sound",
+        "state": {
+          "off": "Off",
+          "radio": "Radio",
+          "harmony": "Harmony",
+          "relax": "Relax",
+          "instrumental": "Instrumental",
+          "rain_drops": "Rain drops"
+        }
+      }
+    },
+    "sensor": {
+      "sleep_end": {
+        "name": "Sleep function end"
+      }
+    },
+    "switch": {
+      "alarm_enabled": {
+        "name": "Alarm {alarm}"
+      },
+      "alarm_monday": {
+        "name": "Alarm {alarm} Monday"
+      },
+      "alarm_tuesday": {
+        "name": "Alarm {alarm} Tuesday"
+      },
+      "alarm_wednesday": {
+        "name": "Alarm {alarm} Wednesday"
+      },
+      "alarm_thursday": {
+        "name": "Alarm {alarm} Thursday"
+      },
+      "alarm_friday": {
+        "name": "Alarm {alarm} Friday"
+      },
+      "alarm_saturday": {
+        "name": "Alarm {alarm} Saturday"
+      },
+      "alarm_sunday": {
+        "name": "Alarm {alarm} Sunday"
+      },
+      "sleep": {
+        "name": "Sleep function"
+      },
+      "sleep_fade_out": {
+        "name": "Sleep sound fade-out"
+      }
+    },
+    "time": {
+      "alarm_time": {
+        "name": "Alarm {alarm} time"
+      }
     }
   },
   "exceptions": {

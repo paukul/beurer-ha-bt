@@ -13,7 +13,14 @@ from .const import DOMAIN, IDLE_DISCONNECT_SECONDS
 from .coordinator import WL75ConfigEntry, WL75Coordinator, WL75Data, poll_interval
 from .device import WL75Device
 
-PLATFORMS: list[Platform] = [Platform.LIGHT]
+PLATFORMS: list[Platform] = [
+    Platform.LIGHT,
+    Platform.NUMBER,
+    Platform.SELECT,
+    Platform.SENSOR,
+    Platform.SWITCH,
+    Platform.TIME,
+]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: WL75ConfigEntry) -> bool:

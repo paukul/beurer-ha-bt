@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable
 from typing import Any
 
 from homeassistant.components.light import (
@@ -14,15 +13,12 @@ from homeassistant.components.light import (
     LightEntityFeature,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util.color import brightness_to_value, value_to_brightness
 
-from .const import DOMAIN
 from .coordinator import WL75ConfigEntry, WL75Coordinator
-from .device import BLEAK_EXCEPTIONS
-from .entity import WL75Entity
-from .protocol import MOOD_SCENES, ProtocolError
+from .entity import WL75Entity, call_device
+from .protocol import MOOD_SCENES
 
 # The lamp takes brightness in percent, 1-100.
 BRIGHTNESS_SCALE = (1, 100)
@@ -47,17 +43,6 @@ async def async_setup_entry(
 
 def _to_percent(brightness: int) -> int:
     return round(brightness_to_value(BRIGHTNESS_SCALE, brightness))
-
-
-async def _call(action: Awaitable[None]) -> None:
-    try:
-        await action
-    except (*BLEAK_EXCEPTIONS, ProtocolError) as err:
-        raise HomeAssistantError(
-            translation_domain=DOMAIN,
-            translation_key="command_failed",
-            translation_placeholders={"error": str(err)},
-        ) from err
 
 
 class WL75MainLight(WL75Entity, LightEntity):
@@ -91,13 +76,13 @@ class WL75MainLight(WL75Entity, LightEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the light on."""
         brightness = kwargs.get(ATTR_BRIGHTNESS)
-        await _call(
+        await call_device(
             self._device.turn_on_light(_to_percent(brightness) if brightness is not None else None)
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the light off."""
-        await _call(self._device.turn_off_light())
+        await call_device(self._device.turn_off_light())
 
 
 class WL75MoodLight(WL75Entity, LightEntity):
@@ -145,7 +130,7 @@ class WL75MoodLight(WL75Entity, LightEntity):
         """Turn the light on."""
         brightness = kwargs.get(ATTR_BRIGHTNESS)
         effect = kwargs.get(ATTR_EFFECT)
-        await _call(
+        await call_device(
             self._device.turn_on_mood(
                 brightness=_to_percent(brightness) if brightness is not None else None,
                 rgb=kwargs.get(ATTR_RGB_COLOR),
@@ -155,4 +140,4 @@ class WL75MoodLight(WL75Entity, LightEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the light off."""
-        await _call(self._device.turn_off_mood())
+        await call_device(self._device.turn_off_mood())

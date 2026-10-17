@@ -10,10 +10,19 @@ ESPHome Bluetooth-Proxys.
 - **Licht**: an/aus, Helligkeit
 - **Stimmungslicht**: an/aus, Helligkeit, RGB-Farbe, 10 Effekte (Random, Rainbow,
   Rainbow Slow, Fusion, Pulse, Wave, Chill, Action, Forest, Summer)
+- **Wecker 1 und 2**: an/aus, Uhrzeit, Wochentage, Weckton, Lautstärke, Schlummerzeit,
+  Wecklicht (Sonnenaufgang / aktivierendes Licht), Dauer des Sonnenaufgangs, Helligkeit
+- **Einschlaffunktion**: starten/stoppen, Dauer, Licht (Sonnenuntergang, Stimmungslicht,
+  Entspannung), Helligkeit, Klang, Lautstärke, Ausblenden. Ein Sensor zeigt das Ende an.
 - Stellt beim Verbinden die Uhr der Lampe auf die Home-Assistant-Zeit (wenn die Lampe auf
   automatische Zeit eingestellt ist)
 
-Geplant: Wecker, Einschlaffunktion, Radio.
+Die Lampe übernimmt Einschlaf-Einstellungen nur, während die Einschlaffunktion läuft. Home
+Assistant speichert sie deshalb selbst und schickt sie bei jedem Start mit. Die
+Einstellungen der Wecker liest die Integration vor jeder Änderung frisch von der Lampe,
+damit Änderungen aus der App nicht überschrieben werden.
+
+Geplant: Radio.
 
 ## Installation
 
@@ -29,9 +38,6 @@ Geplant: Wecker, Einschlaffunktion, Radio.
 
 Für ESPHome-Bluetooth-Proxys muss `bluetooth_proxy: active: true` gesetzt sein (bei den
 fertigen Proxy-Firmwares ist das der Fall).
-3. Die Lampe wird automatisch gefunden. Alternativ *Einstellungen → Geräte & Dienste →
-   Integration hinzufügen → Beurer WL75*.
-
 Die Lampe akzeptiert nur **eine** Bluetooth-Verbindung gleichzeitig. Die LightUp-App
 muss also geschlossen sein, während Home Assistant mit der Lampe spricht. Die
 Integration trennt die Verbindung nach 60 Sekunden ohne Befehl.

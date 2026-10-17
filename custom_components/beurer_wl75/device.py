@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from dataclasses import replace
-from datetime import datetime
+from contextlib import suppress
+from dataclasses import dataclass, replace
+from datetime import datetime, timedelta
 import logging
+import math
 
 from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak.backends.device import BLEDevice
@@ -28,7 +30,7 @@ from bleak_retry_connector import (
 )
 
 from . import protocol
-from .protocol import LightState, MoodState, Settings
+from .protocol import Alarm, LightState, MoodState, Settings, SleepState
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,6 +43,22 @@ class WL75Error(Exception):
 
 
 BLEAK_EXCEPTIONS = (*BLEAK_RETRY_EXCEPTIONS, BleakError, WL75Error)
+
+
+@dataclass(frozen=True, slots=True)
+class SleepSettings:
+    """Settings applied when the sleep function starts.
+
+    The lamp only accepts them while the sleep function runs and forgets the
+    duration when it stops, so they are kept here and sent on every start.
+    """
+
+    minutes: int = 30
+    light: int = 1
+    brightness: int = 100
+    sound: int = 0
+    volume: int = 5
+    fade_out: bool = True
 
 
 class WL75Device:
@@ -69,6 +87,11 @@ class WL75Device:
         self.settings: Settings | None = None
         self.light: LightState | None = None
         self.mood: MoodState | None = None
+        self.alarms: dict[int, Alarm] = {}
+        self.sleep: SleepState | None = None
+        self.sleep_settings = SleepSettings()
+        self.sleep_end: datetime | None = None
+        self._sleep_handle: asyncio.TimerHandle | None = None
 
     @property
     def address(self) -> str:
@@ -87,6 +110,11 @@ class WL75Device:
             return None
         return self.mood.scene or None
 
+    @property
+    def sleep_running(self) -> bool:
+        """Return if the sleep function runs (as far as known without polling)."""
+        return self.sleep is not None and self.sleep.is_on
+
     def set_ble_device_and_advertisement_data(
         self, ble_device: BLEDevice, advertisement_data: AdvertisementData | None = None
     ) -> None:
@@ -103,9 +131,12 @@ class WL75Device:
         return unregister
 
     async def update(self) -> None:
-        """Query the state of main and mood light (no callbacks are fired)."""
+        """Query the complete state (no callbacks are fired)."""
         async with self._lock:
             await self._query_state()
+            for alarm_id in protocol.ALARM_IDS:
+                await self._query_alarm(alarm_id)
+            await self._query_sleep()
 
     async def turn_on_light(self, brightness: int | None = None) -> None:
         """Switch the main light on, optionally with brightness 1-100."""
@@ -144,9 +175,90 @@ class WL75Device:
         """Switch the mood light off."""
         await self._run([protocol.switch_mood(False)])
 
+    async def modify_alarm(self, alarm_id: int, change: Callable[[Alarm], Alarm]) -> None:
+        """Change an alarm.
+
+        The lamp only takes complete alarms, so read the current one first:
+        the cached copy may be outdated (no polling, changes in the app).
+        """
+        async with self._lock:
+            alarm = change(await self._query_alarm(alarm_id))
+            await self._command(protocol.set_alarm(alarm))
+            await self._query_alarm(alarm_id)
+        self._fire_callbacks()
+
+    async def start_sleep(self) -> None:
+        """Start the sleep function with the current sleep settings."""
+        settings = self.sleep_settings
+        async with self._lock:
+            try:
+                await self._command(protocol.switch_sleep(True))
+                await self._command(
+                    protocol.set_sleep_light(settings.minutes, settings.light, settings.brightness)
+                )
+                await self._command(
+                    protocol.set_sleep_sound(settings.sound, settings.volume, settings.fade_out)
+                )
+                self._set_sleep_end(settings.minutes)
+            finally:
+                # Also after a rejected setting: the sleep function may run anyway.
+                with suppress(*BLEAK_EXCEPTIONS):
+                    # The sleep light may switch the mood light.
+                    await self._query_state()
+                    await self._query_sleep()
+                self._fire_callbacks()
+
+    async def stop_sleep(self) -> None:
+        """Stop the sleep function."""
+        async with self._lock:
+            await self._command(protocol.switch_sleep(False))
+            await self._query_state()
+            await self._query_sleep()
+        self._fire_callbacks()
+
+    def restore_sleep_settings(self, **changes: int | bool) -> None:
+        """Set sleep settings without sending them (e.g. restored after a restart)."""
+        self.sleep_settings = replace(self.sleep_settings, **changes)
+
+    async def set_sleep_settings(self, **changes: int | bool) -> None:
+        """Change sleep settings; a running sleep function is updated right away."""
+        old = self.sleep_settings
+        new = self.sleep_settings = replace(old, **changes)
+        if not self.sleep_running:
+            self._fire_callbacks()
+            return
+        payloads = []
+        minutes = None
+        if (old.minutes, old.light, old.brightness) != (new.minutes, new.light, new.brightness):
+            # The duration sent restarts the countdown, so keep the remaining
+            # time (rounded up) when only light or brightness change.
+            minutes = new.minutes if old.minutes != new.minutes else self._sleep_minutes_left()
+            payloads.append(protocol.set_sleep_light(minutes, new.light, new.brightness))
+        if (old.sound, old.volume, old.fade_out) != (new.sound, new.volume, new.fade_out):
+            payloads.append(protocol.set_sleep_sound(new.sound, new.volume, new.fade_out))
+        async with self._lock:
+            for payload in payloads:
+                answer = await self._request(payload)
+                if answer[1:2] != bytes([protocol.ACK_OK]):
+                    # Rejected: the sleep function has ended in the meantime.
+                    self._mark_sleep_off()
+                    break
+            else:
+                if minutes is not None:
+                    self._set_sleep_end(minutes)
+            await self._query_sleep()
+        self._fire_callbacks()
+
+    def _sleep_minutes_left(self) -> int:
+        if self.sleep_end is None:
+            return self.sleep_settings.minutes
+        seconds = (self.sleep_end - self._now()).total_seconds()
+        return min(max(math.ceil(seconds / 60), 1), 60)
+
     async def stop(self) -> None:
         """Disconnect and stop all timers."""
         self._cancel_idle_timer()
+        self._cancel_sleep_timer()
         async with self._lock:
             await self._disconnect()
 
@@ -161,6 +273,23 @@ class WL75Device:
     async def _query_state(self) -> None:
         self.light = LightState.from_payload(await self._request(protocol.query_light()))
         self.mood = MoodState.from_payload(await self._request(protocol.query_mood()))
+
+    async def _query_alarm(self, alarm_id: int) -> Alarm:
+        alarm = Alarm.from_payload(await self._request(protocol.query_alarm(alarm_id)))
+        if alarm.alarm_id != alarm_id:
+            raise WL75Error(f"Asked for alarm {alarm_id}, got alarm {alarm.alarm_id}")
+        self.alarms[alarm_id] = alarm
+        return alarm
+
+    async def _query_sleep(self) -> None:
+        self.sleep = SleepState.from_payload(await self._request(protocol.query_sleep()))
+        if not self.sleep.is_on:
+            self._cancel_sleep_timer()
+            self.sleep_end = None
+        elif self.sleep_end is None:
+            # Started on the lamp or in the app: minutes is the remaining time,
+            # rounded down or up, so this may be up to a minute late.
+            self._set_sleep_end(self.sleep.minutes + 1)
 
     async def _command(self, payload: bytes) -> None:
         _check_ack(payload, await self._request(payload))
@@ -267,6 +396,8 @@ class WL75Device:
                     self.light = replace(self.light, is_on=False)
                 elif payload[1] == protocol.TIMER_MOOD and self.mood is not None:
                     self.mood = replace(self.mood, is_on=False)
+                elif payload[1] == protocol.TIMER_SLEEP:
+                    self._mark_sleep_off()
             else:
                 _LOGGER.debug("%s: ignoring unsolicited %s", self.name, payload.hex(" "))
                 return
@@ -278,6 +409,32 @@ class WL75Device:
     def _fire_callbacks(self) -> None:
         for callback in list(self._callbacks):
             callback()
+
+    def _set_sleep_end(self, minutes: int) -> None:
+        """Remember when the sleep function ends.
+
+        Without polling Home Assistant is usually not connected when the lamp
+        finishes, so the end is tracked locally instead of opening a connection.
+        """
+        self._cancel_sleep_timer()
+        self.sleep_end = self._now() + timedelta(minutes=minutes)
+        self._sleep_handle = asyncio.get_running_loop().call_later(minutes * 60, self._on_sleep_end)
+
+    def _on_sleep_end(self) -> None:
+        self._sleep_handle = None
+        self._mark_sleep_off()
+        self._fire_callbacks()
+
+    def _mark_sleep_off(self) -> None:
+        self._cancel_sleep_timer()
+        self.sleep_end = None
+        if self.sleep is not None:
+            self.sleep = replace(self.sleep, is_on=False)
+
+    def _cancel_sleep_timer(self) -> None:
+        if self._sleep_handle is not None:
+            self._sleep_handle.cancel()
+            self._sleep_handle = None
 
     def _cancel_idle_timer(self) -> None:
         if self._idle_handle is not None:

@@ -26,6 +26,122 @@
       "mood_light": {
         "name": "Stimmungslicht"
       }
+    },
+    "number": {
+      "alarm_volume": {
+        "name": "Wecker {alarm} Lautstärke"
+      },
+      "alarm_sunrise_minutes": {
+        "name": "Wecker {alarm} Sonnenaufgang-Dauer"
+      },
+      "alarm_brightness": {
+        "name": "Wecker {alarm} Lichthelligkeit"
+      },
+      "sleep_minutes": {
+        "name": "Einschlaf-Dauer"
+      },
+      "sleep_brightness": {
+        "name": "Einschlaf-Helligkeit"
+      },
+      "sleep_volume": {
+        "name": "Einschlaf-Lautstärke"
+      }
+    },
+    "select": {
+      "alarm_tone": {
+        "name": "Wecker {alarm} Weckton",
+        "state": {
+          "buzzer": "Summer",
+          "nature": "Natur",
+          "bells": "Glocken",
+          "classic": "Klassik",
+          "passion": "Passion",
+          "morning_lights": "Morgenlicht",
+          "joyful": "Fröhlich",
+          "radio": "Radio"
+        }
+      },
+      "alarm_wake_up_light": {
+        "name": "Wecker {alarm} Wecklicht",
+        "state": {
+          "off": "Aus",
+          "sunrise": "Sonnenaufgang",
+          "energizing_light": "Aktivierendes Licht"
+        }
+      },
+      "alarm_snooze": {
+        "name": "Wecker {alarm} Schlummern",
+        "state": {
+          "1": "1 min",
+          "2": "2 min",
+          "5": "5 min",
+          "10": "10 min",
+          "20": "20 min",
+          "30": "30 min"
+        }
+      },
+      "sleep_light": {
+        "name": "Einschlaf-Licht",
+        "state": {
+          "off": "Aus",
+          "sunset": "Sonnenuntergang",
+          "mood": "Stimmungslicht",
+          "relax": "Entspannung"
+        }
+      },
+      "sleep_sound": {
+        "name": "Einschlaf-Klang",
+        "state": {
+          "off": "Aus",
+          "radio": "Radio",
+          "harmony": "Harmonie",
+          "relax": "Entspannung",
+          "instrumental": "Instrumental",
+          "rain_drops": "Regentropfen"
+        }
+      }
+    },
+    "sensor": {
+      "sleep_end": {
+        "name": "Einschlaffunktion Ende"
+      }
+    },
+    "switch": {
+      "alarm_enabled": {
+        "name": "Wecker {alarm}"
+      },
+      "alarm_monday": {
+        "name": "Wecker {alarm} Montag"
+      },
+      "alarm_tuesday": {
+        "name": "Wecker {alarm} Dienstag"
+      },
+      "alarm_wednesday": {
+        "name": "Wecker {alarm} Mittwoch"
+      },
+      "alarm_thursday": {
+        "name": "Wecker {alarm} Donnerstag"
+      },
+      "alarm_friday": {
+        "name": "Wecker {alarm} Freitag"
+      },
+      "alarm_saturday": {
+        "name": "Wecker {alarm} Samstag"
+      },
+      "alarm_sunday": {
+        "name": "Wecker {alarm} Sonntag"
+      },
+      "sleep": {
+        "name": "Einschlaffunktion"
+      },
+      "sleep_fade_out": {
+        "name": "Einschlaf-Klang ausblenden"
+      }
+    },
+    "time": {
+      "alarm_time": {
+        "name": "Wecker {alarm} Uhrzeit"
+      }
     }
   },
   "exceptions": {

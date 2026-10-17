@@ -8,10 +8,10 @@ from habluetooth import BluetoothServiceInfoBleak
 from homeassistant.components.light import ATTR_BRIGHTNESS, ATTR_EFFECT, ATTR_RGB_COLOR
 from homeassistant.config_entries import SOURCE_BLUETOOTH, SOURCE_USER
 from homeassistant.const import ATTR_ENTITY_ID, CONF_ADDRESS, STATE_OFF, STATE_ON
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
 from homeassistant.data_entry_flow import FlowResultType
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry, mock_restore_cache
 
 from custom_components.beurer_wl75 import device as device_module
 from custom_components.beurer_wl75.const import CONF_POLL_INTERVAL, DOMAIN
@@ -194,3 +194,146 @@ async def test_setup_retry_when_not_found(hass: HomeAssistant) -> None:
     entry.add_to_hass(hass)
     assert not await hass.config_entries.async_setup(entry.entry_id)
     assert entry.state.name == "SETUP_RETRY"
+
+
+async def _setup(hass: HomeAssistant) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="WL75", unique_id=ADDRESS, data={CONF_ADDRESS: ADDRESS}
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.beurer_wl75.bluetooth.async_ble_device_from_address",
+        return_value=BLE_DEVICE,
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    return entry
+
+
+async def test_alarm_entities(hass: HomeAssistant, lamp: FakeLamp) -> None:
+    entry = await _setup(hass)
+
+    assert hass.states.get("switch.wl75_alarm_1").state == STATE_ON
+    assert hass.states.get("switch.wl75_alarm_2").state == STATE_OFF
+    assert hass.states.get("time.wl75_alarm_1_time").state == "07:00:00"
+    assert hass.states.get("time.wl75_alarm_2_time").state == "08:45:00"
+    assert hass.states.get("switch.wl75_alarm_1_monday").state == STATE_ON
+    assert hass.states.get("switch.wl75_alarm_1_sunday").state == STATE_OFF
+    assert hass.states.get("select.wl75_alarm_1_tone").state == "passion"
+    assert hass.states.get("select.wl75_alarm_1_wake_up_light").state == "sunrise"
+    assert hass.states.get("select.wl75_alarm_1_snooze").state == "5"
+    assert hass.states.get("number.wl75_alarm_1_volume").state == "6"
+    assert hass.states.get("number.wl75_alarm_1_sunrise_duration").state == "10"
+    assert hass.states.get("number.wl75_alarm_1_light_brightness").state == "80"
+
+    await hass.services.async_call(
+        "time",
+        "set_value",
+        {ATTR_ENTITY_ID: "time.wl75_alarm_2_time", "time": "06:15"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        "switch", "turn_on", {ATTR_ENTITY_ID: "switch.wl75_alarm_2_saturday"}, blocking=True
+    )
+    await hass.services.async_call(
+        "switch", "turn_on", {ATTR_ENTITY_ID: "switch.wl75_alarm_2"}, blocking=True
+    )
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {ATTR_ENTITY_ID: "select.wl75_alarm_2_tone", "option": "radio"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {ATTR_ENTITY_ID: "select.wl75_alarm_2_snooze", "option": "10"},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {ATTR_ENTITY_ID: "number.wl75_alarm_2_sunrise_duration", "value": 30},
+        blocking=True,
+    )
+    assert lamp.alarms[2] == bytearray.fromhex("02 0f 06 c1 08 05 04 01 1e 50")
+    assert hass.states.get("time.wl75_alarm_2_time").state == "06:15:00"
+    assert hass.states.get("switch.wl75_alarm_2").state == STATE_ON
+    assert hass.states.get("switch.wl75_alarm_2_saturday").state == STATE_ON
+
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_sleep_entities(hass: HomeAssistant, lamp: FakeLamp) -> None:
+    entry = await _setup(hass)
+
+    # Seeded from the lamp (off), except the duration it forgets.
+    assert hass.states.get("switch.wl75_sleep_function").state == STATE_OFF
+    assert hass.states.get("number.wl75_sleep_duration").state == "30"
+    assert hass.states.get("select.wl75_sleep_light").state == "sunset"
+    assert hass.states.get("number.wl75_sleep_light_brightness").state == "99"
+    assert hass.states.get("select.wl75_sleep_sound").state == "off"
+    assert hass.states.get("number.wl75_sleep_volume").state == "6"
+    assert hass.states.get("switch.wl75_sleep_sound_fade_out").state == STATE_ON
+    assert hass.states.get("sensor.wl75_sleep_function_end").state == "unknown"
+
+    # While off, settings are only stored.
+    lamp.written.clear()
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {ATTR_ENTITY_ID: "number.wl75_sleep_duration", "value": 20},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {ATTR_ENTITY_ID: "select.wl75_sleep_sound", "option": "rain_drops"},
+        blocking=True,
+    )
+    assert lamp.written == []
+    assert hass.states.get("number.wl75_sleep_duration").state == "20"
+
+    await hass.services.async_call(
+        "switch", "turn_on", {ATTR_ENTITY_ID: "switch.wl75_sleep_function"}, blocking=True
+    )
+    assert hass.states.get("switch.wl75_sleep_function").state == STATE_ON
+    assert lamp.sleep[:5] == bytearray.fromhex("01 13 01 63 05")
+    assert hass.states.get("sensor.wl75_sleep_function_end").state != "unknown"
+
+    # While running, settings go to the lamp right away.
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {ATTR_ENTITY_ID: "number.wl75_sleep_volume", "value": 3},
+        blocking=True,
+    )
+    assert lamp.sleep[5] == 3
+
+    await hass.services.async_call(
+        "switch", "turn_off", {ATTR_ENTITY_ID: "switch.wl75_sleep_function"}, blocking=True
+    )
+    assert hass.states.get("switch.wl75_sleep_function").state == STATE_OFF
+    assert hass.states.get("sensor.wl75_sleep_function_end").state == "unknown"
+    # Still 20, although the lamp reports 2 minutes when off.
+    assert hass.states.get("number.wl75_sleep_duration").state == "20"
+
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_sleep_settings_restored(hass: HomeAssistant, lamp: FakeLamp) -> None:
+    mock_restore_cache(
+        hass,
+        [
+            State("number.wl75_sleep_duration", "45"),
+            State("select.wl75_sleep_sound", "harmony"),
+            State("switch.wl75_sleep_sound_fade_out", STATE_OFF),
+            State("number.wl75_sleep_volume", "unavailable"),
+        ],
+    )
+    entry = await _setup(hass)
+    assert entry.runtime_data.device.sleep_settings == device_module.SleepSettings(
+        minutes=45, light=1, brightness=99, sound=2, volume=6, fade_out=False
+    )
+    assert hass.states.get("number.wl75_sleep_duration").state == "45"
+    await hass.config_entries.async_unload(entry.entry_id)

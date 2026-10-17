@@ -410,9 +410,9 @@ Befehlstabelle aus Abschnitt 4 überein. Neue Erkenntnisse:
   Antwort `F5 01`. Die App sendet immer den kompletten Alarm.
 - **Sleep an/aus** bestätigt: `1E 01` / `1E 00` → `EE 01`.
 - **Sleep-Konfig Ton:** `1F 02 00 06 01` = Ton aus, Lautstärke 6, Fade an → `EF 01`.
-- **Sleep-Konfig Licht:** `1F 01 1A 01 63` → `EF 01`. **[Offen]** Das zweite Byte (`1A`
-  = 26) taucht im Sleep-Status (`ED`) nicht auf, dort steht weiterhin `[2] = 02`. Entweder
-  ist `ED[2]` kein Minutenwert, oder `1F 01` hat ein anderes Layout als angenommen.
+- **Sleep-Konfig Licht:** `1F 01 1A 01 63` → `EF 01`. Das zweite Byte (`1A` = 26) tauchte
+  im Sleep-Status (`ED`) nicht auf, dort stand weiterhin `[2] = 02`. Geklärt in
+  Abschnitt 14: Im Ruhezustand nimmt die Lampe die Sleep-Konfig nicht an.
 - **Radio:** an/aus `09 01`/`09 00` → `F9 01`; Preset `0A 03`/`0A 04`/`0A 05` → `FA 01`;
   Lautstärke `0D 03` → `FD 01`. Status `F6 01 01 03 6B 07 00 00` = an, Kanal 1,
   87,5 MHz, Lautstärke 7, Timer aus.
@@ -448,3 +448,39 @@ ein Request gleichzeitig, jeweils ~130–180 ms bis zur Antwort, keine verstümm
 - **[Offen]** Ob `17 01` immer Rainbow startet (so nimmt es die App an, Abschnitt 5) oder
   die zuletzt aktive Szene bzw. Farbe fortsetzt, ist nicht verifiziert. Die Integration
   liest nach dem Einschalten den Status und zeigt an, was die Lampe meldet.
+
+## 14. Live-Test Wecker und Einschlaffunktion (2026-10-17, 19:00–19:20)
+
+### Wecker
+
+Über `WL75Device.modify_alarm` an Alarm 2 (inaktiv), danach mit dem gesicherten
+Original-Frame zurückgeschrieben und byteidentisch zurückgelesen:
+
+- Zeit 06:15, Samstag dazu, Ton 8 (Radio), Schlummern Index 4, Sonnenaufgang 30 min,
+  Lautstärke 3, Helligkeit 55, Wecklicht 2 → `F4 02 0F 06 41 08 03 04 02 1E 37`.
+  Jedes Feld kommt so zurück, wie es gesendet wurde.
+- Sonnenaufgang 60 min wird angenommen (`…02 3C 37`), die Obergrenze 60 aus der App stimmt.
+- Das ID-Byte hatte bei beiden Weckern nie Bit 7 gesetzt.
+- Schlummer-Byte = Index 1–6 (1/2/5/10/20/30 min): `03` = 5 min.
+
+### Einschlaffunktion
+
+- **`1F` wird im Ruhezustand abgelehnt** (`EF 00`) und nur angenommen, während die
+  Einschlaffunktion läuft. Die App schickt die Konfig deshalb nach `1E 01`.
+- `1E 01` allein startet mit 2 min Dauer. **`1F 01 N …` startet den Countdown neu
+  mit N Minuten**, auch mitten im Lauf. Gemessen: `1F 01 02 …` um 19:14:25, `B0 04` um
+  19:16:25.
+- `ED[2]` ist während des Laufs die **Restzeit** in Minuten. Sie wird mal ab-, mal
+  aufgerundet: direkt nach `1F 01 02` steht `02`, zwei Sekunden später `01`.
+- `ED[4]` ist während des Laufs die **aktuelle Helligkeit**, die Richtung Ende abnimmt
+  (50 → 30 → 10 innerhalb von gut einer Minute).
+- Nach dem Ende bzw. `1E 00` meldet `ED[2]` wieder `02`. Licht, Helligkeit, Ton,
+  Lautstärke und Fade bleiben gespeichert (z. B. `ED 00 02 01 46 00 03 01`).
+- Ende per Notification `B0 04`, solange eine Verbindung besteht.
+- `1F 02 00 …` (Ton aus) wird angenommen.
+- Während Sleep-Licht 1 (Sunset) oder 2 (Mood) läuft, melden Hauptlicht (`E1`) und
+  Stimmungslicht (`E6[1]`) „aus“. Bei Mood ändern sich nur die Farbwerte in `E6[5..7]`.
+
+Folgerungen für die Integration: Dauer und Einstellungen hält Home Assistant und sendet sie
+bei jedem Start nach `1E 01`. Das Ende wird lokal mitgezählt und nach jedem gesendeten
+`1F 01` neu gesetzt, ohne dafür eine Verbindung zu öffnen.

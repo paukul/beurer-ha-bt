@@ -17,6 +17,13 @@ class FakeLamp:
         self.light = bytearray.fromhex("00 51 00 0a")
         self.mood = bytearray.fromhex("00 64 00 00 ff a4 00 02")  # last scene: Rainbow
         self.settings = bytes.fromhex("00 00 00 01")
+        # Real alarms of the test lamp: 1 = 07:00 Mo-Fr enabled, 2 = 08:45 Sunday disabled
+        self.alarms = {
+            1: bytearray.fromhex("01 00 07 be 05 06 03 01 0a 50"),
+            2: bytearray.fromhex("02 2d 08 01 01 05 03 01 0a 50"),
+        }
+        # Sleep off: minutes always reads 2 while off
+        self.sleep = bytearray.fromhex("00 02 01 63 00 06 01")
         self.connects = 0
         # Number of upcoming requests to leave unanswered
         self.drop_answers = 0
@@ -83,4 +90,23 @@ class FakeLamp:
                 self.mood[7] = 0
             case protocol.CMD_MOOD_SCENE:
                 self.mood[7] = args[0]
+            case protocol.CMD_ALARM_STATUS:
+                return bytes([code, *self.alarms[args[0]]])
+            case protocol.CMD_ALARM_SET:
+                self.alarms[args[0]] = bytearray(args)
+            case protocol.CMD_SLEEP_STATUS:
+                return bytes([code, *self.sleep])
+            case protocol.CMD_SLEEP_SWITCH:
+                # Starts with the default 2 minutes (reports the remaining 1),
+                # forgets the duration when stopped.
+                self.sleep[0] = args[0]
+                self.sleep[1] = 1 if args[0] else 2
+            case protocol.CMD_SLEEP_CONFIG:
+                if not self.sleep[0]:
+                    return bytes([code, 0])  # only accepted while running
+                if args[0] == protocol.SLEEP_CONFIG_LIGHT:
+                    self.sleep[1] = args[1] - 1  # remaining minutes
+                    self.sleep[2:4] = args[2:4]
+                else:
+                    self.sleep[4:7] = args[1:4]
         return bytes([code, protocol.ACK_OK])

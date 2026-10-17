@@ -9,7 +9,7 @@ command (request) or the response code (notification).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 SERVICE_UUID = "14839ac4-7d7e-415c-9a42-167340cf2339"
@@ -23,6 +23,8 @@ MAX_LEN = 0x20
 CMD_HANDSHAKE = 0x00
 CMD_SETTINGS = 0x01
 CMD_SET_TIME = 0x03
+CMD_ALARM_STATUS = 0x04
+CMD_ALARM_SET = 0x05
 CMD_LIGHT_STATUS = 0x11
 CMD_LIGHT_SWITCH = 0x12
 CMD_LIGHT_BRIGHTNESS = 0x13
@@ -31,6 +33,13 @@ CMD_MOOD_SWITCH = 0x17
 CMD_MOOD_BRIGHTNESS = 0x18
 CMD_MOOD_COLOR = 0x1B
 CMD_MOOD_SCENE = 0x1C
+CMD_SLEEP_STATUS = 0x1D
+CMD_SLEEP_SWITCH = 0x1E
+CMD_SLEEP_CONFIG = 0x1F
+
+# Second byte of 1F: which half of the sleep configuration is sent
+SLEEP_CONFIG_LIGHT = 1
+SLEEP_CONFIG_SOUND = 2
 
 HANDSHAKE_KEY = 0x75
 HANDSHAKE_ANSWER = bytes([0xF0, HANDSHAKE_KEY])
@@ -42,6 +51,42 @@ TIMER_RADIO = 1
 TIMER_LIGHT = 2
 TIMER_MOOD = 3
 TIMER_SLEEP = 4
+
+ALARM_IDS = (1, 2)
+
+# Alarm days bit mask: bit 0 = Sunday ... bit 6 = Saturday
+ALARM_DAY_BITS: dict[str, int] = {
+    "monday": 1 << 1,
+    "tuesday": 1 << 2,
+    "wednesday": 1 << 3,
+    "thursday": 1 << 4,
+    "friday": 1 << 5,
+    "saturday": 1 << 6,
+    "sunday": 1 << 0,
+}
+ALARM_TONES: dict[int, str] = {
+    1: "buzzer",
+    2: "nature",
+    3: "bells",
+    4: "classic",
+    5: "passion",
+    6: "morning_lights",
+    7: "joyful",
+    8: "radio",
+}
+ALARM_WAKE_UP_LIGHTS: dict[int, str] = {0: "off", 1: "sunrise", 2: "energizing_light"}
+# Snooze is sent as 1-based index into these minutes
+ALARM_SNOOZE_MINUTES = (1, 2, 5, 10, 20, 30)
+
+SLEEP_LIGHTS: dict[int, str] = {0: "off", 1: "sunset", 2: "mood", 3: "relax"}
+SLEEP_SOUNDS: dict[int, str] = {
+    0: "off",
+    1: "radio",
+    2: "harmony",
+    3: "relax",
+    4: "instrumental",
+    5: "rain_drops",
+}
 
 MOOD_SCENES: dict[int, str] = {
     1: "Random",
@@ -163,6 +208,66 @@ def set_mood_scene(scene: int) -> bytes:
     return bytes([CMD_MOOD_SCENE, _clamp(scene, 0, 10)])
 
 
+def query_alarm(alarm_id: int) -> bytes:
+    """Return the payload of the alarm query (alarm 1 or 2)."""
+    return bytes([CMD_ALARM_STATUS, alarm_id])
+
+
+def set_alarm(alarm: Alarm) -> bytes:
+    """Return the payload that writes a complete alarm."""
+    return bytes(
+        [
+            CMD_ALARM_SET,
+            alarm.alarm_id,
+            _clamp(alarm.minute, 0, 59),
+            _clamp(alarm.hour, 0, 23),
+            (0x80 if alarm.enabled else 0) | (alarm.days & 0x7F),
+            _clamp(alarm.tone, 1, 8),
+            _clamp(alarm.volume, 1, 10),
+            _clamp(alarm.snooze, 1, len(ALARM_SNOOZE_MINUTES)),
+            _clamp(alarm.wake_up_light, 0, 2),
+            _clamp(alarm.sunrise_minutes, 2, 60),
+            _clamp(alarm.brightness, 1, 100),
+        ]
+    )
+
+
+def query_sleep() -> bytes:
+    """Return the payload of the sleep function status query."""
+    return bytes([CMD_SLEEP_STATUS])
+
+
+def switch_sleep(on: bool) -> bytes:
+    """Return the payload that starts or stops the sleep function."""
+    return bytes([CMD_SLEEP_SWITCH, int(on)])
+
+
+def set_sleep_light(minutes: int, light: int, brightness: int) -> bytes:
+    """Return the payload that sets duration and light of a running sleep function."""
+    return bytes(
+        [
+            CMD_SLEEP_CONFIG,
+            SLEEP_CONFIG_LIGHT,
+            _clamp(minutes, 1, 60),
+            _clamp(light, 0, 3),
+            _clamp(brightness, 10, 100),
+        ]
+    )
+
+
+def set_sleep_sound(sound: int, volume: int, fade_out: bool) -> bytes:
+    """Return the payload that sets the sound of a running sleep function."""
+    return bytes(
+        [
+            CMD_SLEEP_CONFIG,
+            SLEEP_CONFIG_SOUND,
+            _clamp(sound, 0, 5),
+            _clamp(volume, 1, 10),
+            int(fade_out),
+        ]
+    )
+
+
 def _clamp(value: int, low: int, high: int) -> int:
     return max(low, min(high, int(value)))
 
@@ -227,6 +332,75 @@ class MoodState:
             timer_minutes=data[3],
             rgb=(data[4], data[5], data[6]),
             scene=data[7],
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class Alarm:
+    """An alarm (response F4, request 05)."""
+
+    alarm_id: int
+    minute: int
+    hour: int
+    enabled: bool
+    days: int
+    tone: int
+    volume: int
+    snooze: int
+    wake_up_light: int
+    sunrise_minutes: int
+    brightness: int
+
+    @classmethod
+    def from_payload(cls, payload: bytes) -> Alarm:
+        data = _data(payload, response_code(CMD_ALARM_STATUS), 10)
+        return cls(
+            alarm_id=data[0] & 0x7F,
+            minute=data[1],
+            hour=data[2],
+            enabled=bool(data[3] & 0x80),
+            days=data[3] & 0x7F,
+            tone=data[4],
+            volume=data[5],
+            snooze=data[6],
+            wake_up_light=data[7],
+            sunrise_minutes=data[8],
+            brightness=data[9],
+        )
+
+    def with_day(self, bit: int, on: bool) -> Alarm:
+        """Return a copy with one day bit set or cleared."""
+        return replace(self, days=self.days | bit if on else self.days & ~bit)
+
+
+@dataclass(frozen=True, slots=True)
+class SleepState:
+    """Sleep function status (response ED).
+
+    While the sleep function runs, ``minutes`` is the remaining time and
+    ``brightness`` the current, fading brightness. While it is off, ``minutes``
+    is always 2: the lamp does not keep the duration (see docs, section 14).
+    """
+
+    is_on: bool
+    minutes: int
+    light: int
+    brightness: int
+    sound: int
+    volume: int
+    fade_out: bool
+
+    @classmethod
+    def from_payload(cls, payload: bytes) -> SleepState:
+        data = _data(payload, response_code(CMD_SLEEP_STATUS), 7)
+        return cls(
+            is_on=data[0] == 1,
+            minutes=data[1],
+            light=data[2],
+            brightness=data[3],
+            sound=data[4],
+            volume=data[5],
+            fade_out=data[6] == 1,
         )
 
 
